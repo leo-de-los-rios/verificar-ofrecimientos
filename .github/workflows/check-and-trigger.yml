@@ -20,8 +20,8 @@ jobs:
       STATE_FILE: .state_ofrec_hash
       PARQUET_PATH: ofrecimientos.parquet
       EVENT_TYPE: ofrecimientos-changed
-      TARGET_OWNER: ORG
-      TARGET_REPO: REPO_PRIVADO
+      TARGET_OWNER: leo-de-los-rios
+      TARGET_REPO: ofrecimientos_horas_catedra
 
     steps:
       - name: Checkout
