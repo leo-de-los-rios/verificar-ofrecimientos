@@ -1,4 +1,3 @@
-# core/scraper/main.py
 import asyncio
 import json
 import time
@@ -11,7 +10,6 @@ import requests
 from bs4 import BeautifulSoup
 import json5
 
-# --- Config mínima ---
 DAYS = 7
 URL = (
     "https://educacion.sanjuan.edu.ar/mesj/"
@@ -27,31 +25,26 @@ HEADERS = {
     "Referer": URL,
 }
 
-OUT_PATH = Path("../../data/raw/ofrecimientos/ofrecimientos_general.parquet")
+OUT_PATH = Path("ofrecimientos.parquet")
 
 
 def _get_hidden(soup: BeautifulSoup, name: str) -> str:
-    """Devuelve el valor de un input[type=hidden] o cadena vacía."""
     tag = soup.find("input", {"name": name})
     return tag["value"] if tag and tag.has_attr("value") else ""
 
 
 def _bootstrap_viewstate() -> tuple[str, str]:
-    """Hace el GET inicial para obtener VIEWSTATE y VIEWSTATEGENERATOR."""
     resp = requests.get(URL, timeout=30)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
     viewstate = _get_hidden(soup, "__VIEWSTATE")
     viewstate_gen = _get_hidden(soup, "__VIEWSTATEGENERATOR")
-    if not viewstate or not viewstate_gen:
-        raise RuntimeError("No se pudieron obtener __VIEWSTATE/GENERATOR.")
     return viewstate, viewstate_gen
 
 
 async def _fetch_date(
     session: aiohttp.ClientSession, fecha_iso: str, viewstate: str, viewstate_gen: str
 ) -> list[dict]:
-    """Hace el POST para una fecha y devuelve la lista de registros."""
     cfg = {
         "config": {
             "extraParams": {
@@ -72,25 +65,17 @@ async def _fetch_date(
         "__ExtNetDirectEventMarker": "delta=true",
     }
     params = {"_dc": str(int(time.time() * 1000))}
-    try:
-        async with session.post(
-            URL, params=params, data=payload, headers=HEADERS, timeout=30
-        ) as resp:
-            text = await resp.text()
-    except Exception:
-        return []
+    async with session.post(
+        URL, params=params, data=payload, headers=HEADERS, timeout=30
+    ) as resp:
+        text = await resp.text()
 
     soup = BeautifulSoup(text, "html.parser")
     ta = soup.find("textarea")
     if not ta:
         return []
-
-    try:
-        parsed = json5.loads(ta.get_text(strip=True))
-        data = parsed.get("serviceResponse", {}).get("data", {}).get("data", [])
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    parsed = json5.loads(ta.get_text(strip=True))
+    return parsed.get("serviceResponse", {}).get("data", {}).get("data", [])
 
 
 async def _gather_all(viewstate: str, viewstate_gen: str) -> list[dict]:
@@ -101,7 +86,6 @@ async def _gather_all(viewstate: str, viewstate_gen: str) -> list[dict]:
     async with aiohttp.ClientSession() as session:
         tasks = [_fetch_date(session, f, viewstate, viewstate_gen) for f in fechas]
         results = await asyncio.gather(*tasks)
-    # aplanar
     return [row for sub in results for row in sub]
 
 
@@ -112,8 +96,7 @@ def main() -> None:
 
     print(f"➡️ Ofrecimientos obtenidos: {df.height}")
     if df.height:
-        OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(OUT_PATH.as_posix())
+        df.write_parquet(OUT_PATH)
         print(f"✅ Guardado en {OUT_PATH}")
     else:
         print("⚠️ No se obtuvieron datos.")
