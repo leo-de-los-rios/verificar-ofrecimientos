@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # para commitear el estado (hash)
+  contents: write
 
 concurrency:
   group: check-ofrecimientos
@@ -20,6 +20,7 @@ jobs:
       STATE_FILE: .state_ofrec_hash
       PARQUET_PATH: ofrecimientos.parquet
       EVENT_TYPE: ofrecimientos-changed
+      EVENT_TYPE_NO_CHANGE: ofrecimientos-no-change
       TARGET_OWNER: leo-de-los-rios
       TARGET_REPO: ofrecimientos_horas_catedra
 
@@ -43,7 +44,6 @@ jobs:
       - name: Run scraper
         run: |
           python - << 'PY'
-          import sys
           from main import main
           if __name__ == "__main__":
               main()
@@ -85,7 +85,7 @@ jobs:
             git push || echo "No se pudo pushear (ok si no hay cambios reales)"
           fi
 
-      - name: Trigger private repo via repository_dispatch
+      - name: Trigger private repo (CON cambios)
         if: steps.detect.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
@@ -96,3 +96,15 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             https://api.github.com/repos/${TARGET_OWNER}/${TARGET_REPO}/dispatches \
             -d "{\"event_type\":\"${EVENT_TYPE}\",\"client_payload\":{\"parquet_hash\":\"${{ steps.hash.outputs.curr_hash }}\"}}"
+
+      - name: Trigger private repo (SIN cambios)
+        if: steps.detect.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+        run: |
+          echo "Disparando evento $EVENT_TYPE_NO_CHANGE a ${TARGET_OWNER}/${TARGET_REPO}"
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            https://api.github.com/repos/${TARGET_OWNER}/${TARGET_REPO}/dispatches \
+            -d "{\"event_type\":\"${EVENT_TYPE_NO_CHANGE}\",\"client_payload\":{\"parquet_hash\":\"${{ steps.hash.outputs.curr_hash }}\",\"reason\":\"no-change\"}}"
