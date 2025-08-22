@@ -44,7 +44,7 @@ jobs:
         run: |
           python - << 'PY'
           import sys
-          from core.scraper.main import main
+          from main import main
           if __name__ == "__main__":
               main()
           PY
